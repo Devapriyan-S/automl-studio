@@ -63,7 +63,11 @@ worker.onmessage = ({ data }) => {
     case "ready":
       $("#boot-bar").style.width = "100%";
       $("#runtime-badge").textContent = data.versions;
-      setTimeout(() => { $("#boot").hidden = true; $("#app").hidden = false; }, 320);
+      setTimeout(() => {
+        $("#boot").hidden = true;
+        $("#app").hidden = false;
+        bootstrapDemo();
+      }, 320);
       break;
     case "bootError":
       $("#boot-stage").textContent = "Could not start Python";
@@ -103,6 +107,82 @@ const reveal = (sel) => {
   const node = $(sel);
   if (node.hidden) node.hidden = false;
 };
+
+
+/* Position the page on the result once the demo has rendered.
+ *
+ * Three of these tools put a substantial profiling step between the upload box
+ * and the payoff, which is right for someone working through them and wrong
+ * for a visitor who has not clicked anything yet. The jump is instant rather
+ * than smooth so it reads as the page having opened there, not as the page
+ * moving underneath you. Everything skipped is one scroll up.
+ */
+function landOnResults(selector) {
+  requestAnimationFrame(() => {
+    const n = document.querySelector(selector);
+    if (!n) return;
+    const y = n.getBoundingClientRect().top + window.scrollY - 74;
+    window.scrollTo({ top: Math.max(0, y), behavior: "instant" });
+  });
+}
+
+/* ── Automatic demo on arrival ────────────────────────────── */
+
+/* Suppresses the smooth-scrolls that are right for a user action and wrong
+   for a page that is setting itself up before anyone has clicked. */
+let booting = false;
+
+const DEMO = "churn";
+
+async function bootstrapDemo() {
+  booting = true;
+  try {
+    const sample = SAMPLES[DEMO];
+    await ingest(sample.csv, sample.suggestedTarget);
+    await runTraining();
+    showDemoBanner(sample);
+    compactDropzone();
+    landOnResults("#step-results");
+  } catch (err) {
+    // A failed demo must not leave a broken page — the upload path still works.
+    console.error("demo bootstrap failed", err);
+  } finally {
+    booting = false;
+  }
+}
+
+function showDemoBanner(sample) {
+  const banner = el("div", "demo-banner");
+  banner.append(el("span", "badge badge-privacy", "Live demo"));
+  const text = el("span");
+  text.innerHTML =
+    `Everything below was produced from a sample dataset — ` +
+    `<strong>${esc(sample.title)}</strong>. ${esc(sample.description)}`;
+  banner.append(text);
+  banner.append(el("span", "spacer"));
+  const btn = el("button", null, "Use your own CSV →");
+  btn.type = "button";
+  btn.addEventListener("click", () => {
+    $("#step-upload").scrollIntoView({ behavior: "smooth", block: "center" });
+    dropzone.hidden = false;
+      dropzone.classList.add("compact");
+    dropzone.focus();
+  });
+  banner.append(btn);
+
+  const host = $("#step-upload");
+  const existing = host.querySelector(".demo-banner");
+  if (existing) existing.remove();
+  host.insertBefore(banner, host.querySelector(".step-head").nextSibling);
+}
+
+function compactDropzone() {
+  dropzone.hidden = true;
+  dropzone.classList.add("compact");
+  dropzone.querySelector(".dz-title").textContent = "Drop your own CSV to replace the sample";
+  dropzone.querySelector(".dz-sub").textContent =
+    "Any columns, any size up to ~50 MB. Parsed locally — nothing is uploaded.";
+}
 
 /* ── Step 1: upload ───────────────────────────────────────── */
 
@@ -161,7 +241,7 @@ async function ingest(csvText, suggestedTarget) {
   reveal("#step-configure");
   $("#step-results").hidden = true;
   $("#step-predict").hidden = true;
-  $("#step-profile").scrollIntoView({ behavior: "smooth", block: "start" });
+  if (!booting) $("#step-profile").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 /* ── Step 2: profile ──────────────────────────────────────── */
@@ -252,7 +332,9 @@ function describeTarget() {
     `${col.n_unique} distinct values, ${col.pct_missing}% missing ${guess}`;
 }
 
-$("#train-btn").addEventListener("click", async () => {
+$("#train-btn").addEventListener("click", () => runTraining());
+
+async function runTraining() {
   const btn = $("#train-btn");
   const target = $("#target-select").value;
   const preset = $("#preset-select").value;
@@ -280,8 +362,8 @@ $("#train-btn").addEventListener("click", async () => {
   renderPredictForm(res.input_schema);
   reveal("#step-results");
   reveal("#step-predict");
-  $("#step-results").scrollIntoView({ behavior: "smooth", block: "start" });
-});
+  if (!booting) $("#step-results").scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
 /* ── Step 4: results ──────────────────────────────────────── */
 
