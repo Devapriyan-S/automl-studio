@@ -69,8 +69,9 @@ worker.onmessage = ({ data }) => {
       $("#boot-stage").textContent = "Could not start Python";
       $("#boot-error").hidden = false;
       $("#boot-error").textContent =
-        `${data.error}\n\nThis usually means the CDN is blocked. ` +
-        `Check your network, then reload.`;
+        `${data.error}\n\nIf this page was just redeployed, the CDN may still ` +
+        `be propagating — wait a moment and reload. Otherwise check that ` +
+        `cdn.jsdelivr.net is reachable from your network.`;
       break;
     case "progress":
       $("#train-bar").style.width = `${data.pct * 100}%`;
