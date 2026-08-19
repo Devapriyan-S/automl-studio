@@ -1,0 +1,12 @@
+{
+  "package": "automl_core",
+  "files": [
+    "__init__.py",
+    "engine.py",
+    "models.py",
+    "preprocess.py",
+    "profiling.py",
+    "serialize.py",
+    "task.py"
+  ]
+}

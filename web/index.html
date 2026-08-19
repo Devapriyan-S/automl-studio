@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AutoML Studio — train a model on your own CSV, in your browser</title>
+<meta name="description" content="Upload any CSV and train real scikit-learn models entirely in your browser. No server, no upload, no signup — your data never leaves your machine.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧪</text></svg>">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <div>
+        <h1>AutoML Studio</h1>
+        <p class="tagline">Train real scikit-learn models on <em>your</em> data — entirely in the browser.</p>
+      </div>
+    </div>
+    <div class="badges">
+      <span class="badge badge-privacy" title="No network request carries your data">
+        <span class="dot"></span> Your data never leaves this tab
+      </span>
+      <span class="badge" id="runtime-badge">Booting Python…</span>
+      <a class="badge badge-link" href="https://github.com/Devapriyan-S/automl-studio" target="_blank" rel="noopener">Source ↗</a>
+    </div>
+  </div>
+</header>
+
+<!-- Boot overlay: Pyodide is a ~12 MB download on first visit. -->
+<div id="boot" class="boot">
+  <div class="boot-card">
+    <div class="boot-spinner"></div>
+    <h2 id="boot-stage">Starting Python…</h2>
+    <div class="bar"><div class="bar-fill" id="boot-bar"></div></div>
+    <p class="boot-note">
+      Downloading a real CPython runtime plus scikit-learn (~12 MB, cached after
+      the first visit). Everything after this runs offline.
+    </p>
+    <div id="boot-error" class="boot-error" hidden></div>
+  </div>
+</div>
+
+<main class="wrap" id="app" hidden>
+
+  <!-- ── Step 1 ─────────────────────────────────────────────── -->
+  <section class="step" id="step-upload">
+    <div class="step-head"><span class="step-num">1</span><h2>Load a dataset</h2></div>
+
+    <div class="dropzone" id="dropzone" tabindex="0" role="button"
+         aria-label="Upload a CSV file">
+      <input type="file" id="file-input" accept=".csv,text/csv" hidden>
+      <div class="dz-icon">⇪</div>
+      <p class="dz-title">Drop a CSV here, or click to browse</p>
+      <p class="dz-sub">Any columns, any size up to ~50 MB. Parsed locally.</p>
+    </div>
+
+    <div class="samples">
+      <span class="samples-label">No file handy? Try one:</span>
+      <button class="chip" data-sample="churn">Customer churn <em>classification</em></button>
+      <button class="chip" data-sample="housing">House prices <em>regression</em></button>
+      <button class="chip" data-sample="reviews">Product reviews <em>text</em></button>
+    </div>
+    <div id="upload-error" class="alert alert-error" hidden></div>
+  </section>
+
+  <!-- ── Step 2 ─────────────────────────────────────────────── -->
+  <section class="step" id="step-profile" hidden>
+    <div class="step-head"><span class="step-num">2</span><h2>What we found</h2></div>
+
+    <div class="stat-row" id="dataset-stats"></div>
+
+    <h3 class="sub">Columns <span class="hint">roles inferred from the values, not the names</span></h3>
+    <div class="col-grid" id="column-grid"></div>
+
+    <details class="preview">
+      <summary>Preview first rows</summary>
+      <div class="table-scroll"><table id="preview-table"></table></div>
+    </details>
+  </section>
+
+  <!-- ── Step 3 ─────────────────────────────────────────────── -->
+  <section class="step" id="step-configure" hidden>
+    <div class="step-head"><span class="step-num">3</span><h2>Pick what to predict</h2></div>
+
+    <div class="config">
+      <label class="field">
+        <span class="field-label">Target column</span>
+        <select id="target-select"></select>
+        <span class="field-help" id="target-help"></span>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Search depth</span>
+        <select id="preset-select">
+          <option value="fast" selected>Fast — 3 models (~10s)</option>
+          <option value="full">Full — 6 models (~40s)</option>
+        </select>
+        <span class="field-help">More models, better odds of a strong winner.</span>
+      </label>
+
+      <button class="btn btn-primary" id="train-btn">Train models →</button>
+    </div>
+
+    <div class="progress" id="train-progress" hidden>
+      <div class="bar"><div class="bar-fill" id="train-bar"></div></div>
+      <p id="train-stage">Starting…</p>
+    </div>
+    <div id="train-error" class="alert alert-error" hidden></div>
+  </section>
+
+  <!-- ── Step 4 ─────────────────────────────────────────────── -->
+  <section class="step" id="step-results" hidden>
+    <div class="step-head"><span class="step-num">4</span><h2>Results</h2></div>
+
+    <div class="task-banner" id="task-banner"></div>
+    <div id="warnings"></div>
+
+    <h3 class="sub">Leaderboard
+      <span class="hint">ranked by cross-validation; test scores come from a split no model saw</span>
+    </h3>
+    <div class="table-scroll"><table class="leaderboard" id="leaderboard"></table></div>
+
+    <h3 class="sub">What drove the predictions
+      <span class="hint">permutation importance — how much the score drops when a column is shuffled</span>
+    </h3>
+    <div id="importance" class="importance"></div>
+  </section>
+
+  <!-- ── Step 5 ─────────────────────────────────────────────── -->
+  <section class="step" id="step-predict" hidden>
+    <div class="step-head"><span class="step-num">5</span><h2>Try a prediction</h2></div>
+    <p class="lead">
+      This form was generated from your columns — nothing here is hardcoded.
+      Leave any field blank and the fitted imputer fills it in.
+    </p>
+    <form id="predict-form" class="predict-form"></form>
+    <button class="btn btn-primary" id="predict-btn">Predict</button>
+    <div id="prediction" class="prediction" hidden></div>
+  </section>
+
+</main>
+
+<footer class="wrap footer">
+  <p>Built by <a href="https://github.com/Devapriyan-S" target="_blank" rel="noopener">Devapriyan Sampath</a>
+     · <a href="https://github.com/Devapriyan-S/automl-studio" target="_blank" rel="noopener">Source on GitHub</a></p>
+  <p class="footer-note">
+    Python runs via <a href="https://pyodide.org" target="_blank" rel="noopener">Pyodide</a>
+    (CPython compiled to WebAssembly). There is no backend — the same
+    <code>automl_core</code> package runs unchanged on a server.
+  </p>
+</footer>
+
+<script src="js/samples.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

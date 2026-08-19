@@ -1,0 +1,6 @@
+# Core engine — deliberately minimal so the same code runs under Pyodide.
+numpy>=1.26,<3
+pandas>=2.0
+scikit-learn>=1.4
+scipy>=1.11
+joblib>=1.3
